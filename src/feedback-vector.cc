@@ -169,6 +169,8 @@ const char* FeedbackMetadata::Kind2String(FeedbackSlotKind kind) {
       return "TypeProfile";
     case FeedbackSlotKind::kForIn:
       return "ForIn";
+    case FeedbackSlotKind::kIn:
+      return "In";
     case FeedbackSlotKind::kInstanceOf:
       return "InstanceOf";
     case FeedbackSlotKind::kCloneObject:
@@ -268,6 +270,7 @@ Handle<FeedbackVector> FeedbackVector::New(Isolate* isolate,
       case FeedbackSlotKind::kStoreInArrayLiteral:
       case FeedbackSlotKind::kStoreDataPropertyInLiteral:
       case FeedbackSlotKind::kTypeProfile:
+      case FeedbackSlotKind::kIn:
       case FeedbackSlotKind::kInstanceOf:
         vector->set(index, *uninitialized_sentinel, SKIP_WRITE_BARRIER);
         break;
@@ -426,6 +429,7 @@ void FeedbackNexus::ConfigureUninitialized() {
       SetFeedbackExtra(Smi::kZero, SKIP_WRITE_BARRIER);
       break;
     }
+    case FeedbackSlotKind::kIn:
     case FeedbackSlotKind::kInstanceOf: {
       SetFeedback(*FeedbackVector::UninitializedSentinel(isolate),
                   SKIP_WRITE_BARRIER);
@@ -484,6 +488,7 @@ bool FeedbackNexus::Clear() {
     case FeedbackSlotKind::kLoadGlobalNotInsideTypeof:
     case FeedbackSlotKind::kLoadGlobalInsideTypeof:
     case FeedbackSlotKind::kCall:
+    case FeedbackSlotKind::kIn:
     case FeedbackSlotKind::kInstanceOf:
     case FeedbackSlotKind::kStoreDataPropertyInLiteral:
     case FeedbackSlotKind::kCloneObject:
@@ -651,6 +656,7 @@ InlineCacheState FeedbackNexus::StateFromFeedback() const {
       }
       return MONOMORPHIC;
     }
+    case FeedbackSlotKind::kIn:
     case FeedbackSlotKind::kInstanceOf: {
       if (feedback == MaybeObject::FromObject(
                           *FeedbackVector::UninitializedSentinel(isolate))) {

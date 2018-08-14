@@ -502,20 +502,11 @@ BytecodeArrayBuilder& BytecodeArrayBuilder::CompareOperation(
     case Token::Value::GTE:
       OutputTestGreaterThanOrEqual(reg, feedback_slot);
       break;
+    case Token::Value::IN:
+      OutputTestIn(reg, feedback_slot);
+      break;
     case Token::Value::INSTANCEOF:
       OutputTestInstanceOf(reg, feedback_slot);
-      break;
-    default:
-      UNREACHABLE();
-  }
-  return *this;
-}
-
-BytecodeArrayBuilder& BytecodeArrayBuilder::CompareOperation(Token::Value op,
-                                                             Register reg) {
-  switch (op) {
-    case Token::Value::IN:
-      OutputTestIn(reg);
       break;
     default:
       UNREACHABLE();

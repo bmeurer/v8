@@ -1813,8 +1813,100 @@ IGNITION_HANDLER(TestReferenceEqual, InterpreterAssembler) {
 IGNITION_HANDLER(TestIn, InterpreterAssembler) {
   Node* property = LoadRegisterAtOperandIndex(0);
   Node* object = GetAccumulator();
+  Node* slot_id = BytecodeOperandIdx(1);
+  Node* feedback_vector = LoadFeedbackVector();
   Node* context = GetContext();
 
+  Label done(this), if_generic(this, Label::kDeferred), if_monomorphic(this),
+      if_initialize(this, Label::kDeferred);
+
+  TNode<MaybeObject> feedback =
+      LoadFeedbackVectorSlot(feedback_vector, slot_id);
+  Comment("check if megamorphic");
+  TNode<BoolT> is_megamorphic = WordEqual(
+      feedback, HeapConstant(FeedbackVector::MegamorphicSentinel(isolate())));
+  GotoIf(is_megamorphic, &done);
+
+  GotoIf(TaggedIsSmi(object), &if_generic);
+  TNode<Map> object_map = LoadMap(object);
+  TNode<BoolT> is_monomorphic = IsWeakReferenceTo(feedback, object_map);
+  GotoIf(is_monomorphic, &if_monomorphic);
+
+  TNode<BoolT> is_uninitialized = WordEqual(
+      feedback, HeapConstant(FeedbackVector::UninitializedSentinel(isolate())));
+  GotoIf(is_uninitialized, &if_initialize);
+
+  Branch(IsClearedWeakHeapObject(feedback), &if_initialize, &if_generic);
+
+  BIND(&if_initialize);
+  {
+    GotoIfNot(IsJSArrayMap(object_map), &if_generic);
+    TNode<Int32T> object_elements_kind = LoadMapElementsKind(object_map);
+    GotoIfNot(IsFastElementsKind(object_elements_kind), &if_generic);
+    GotoIfNot(IsPrototypeInitialArrayPrototype(context, object_map),
+              &if_generic);
+    StoreWeakReferenceInFeedbackVector(feedback_vector, slot_id, object_map);
+    ReportFeedbackUpdate(feedback_vector, slot_id, "In:Initialize");
+    Goto(&if_monomorphic);
+  }
+
+  BIND(&if_monomorphic);
+  {
+    TNode<IntPtrT> index = TryToIntptr(property, &if_generic);
+    TNode<IntPtrT> object_length = SmiUntag(LoadFastJSArrayLength(object));
+    GotoIfNot(UintPtrLessThan(index, object_length), &if_generic);
+
+    Label if_true(this), if_false(this), if_hole(this, Label::kDeferred),
+        if_holey(this), if_holey_double(this);
+
+    TNode<Int32T> object_elements_kind = LoadMapElementsKind(object_map);
+    GotoIfNot(IsHoleyFastElementsKind(object_elements_kind), &if_true);
+    Branch(IsDoubleElementsKind(object_elements_kind), &if_holey_double,
+           &if_holey);
+
+    BIND(&if_holey);
+    {
+      TNode<FixedArray> object_elements = CAST(LoadElements(object));
+      TNode<Object> value = LoadFixedArrayElement(object_elements, index);
+      Branch(WordEqual(value, TheHoleConstant()), &if_hole, &if_true);
+    }
+
+    BIND(&if_holey_double);
+    {
+      TNode<FixedDoubleArray> object_elements = CAST(LoadElements(object));
+      LoadFixedDoubleArrayElement(object_elements, index,
+                                  MachineType::Float64(), 0, INTPTR_PARAMETERS,
+                                  &if_hole);
+      Goto(&if_true);
+    }
+
+    BIND(&if_hole);
+    { Branch(IsNoElementsProtectorCellInvalid(), &if_generic, &if_false); }
+
+    BIND(&if_true);
+    {
+      SetAccumulator(TrueConstant());
+      Dispatch();
+    }
+
+    BIND(&if_false);
+    {
+      SetAccumulator(FalseConstant());
+      Dispatch();
+    }
+  }
+
+  BIND(&if_generic);
+  {
+    StoreFeedbackVectorSlot(
+        feedback_vector, slot_id,
+        HeapConstant(FeedbackVector::MegamorphicSentinel(isolate())),
+        SKIP_WRITE_BARRIER);
+    ReportFeedbackUpdate(feedback_vector, slot_id, "In:TransitionMegamorphic");
+    Goto(&done);
+  }
+
+  BIND(&done);
   SetAccumulator(HasProperty(context, object, property, kHasProperty));
   Dispatch();
 }

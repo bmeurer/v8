@@ -4144,7 +4144,8 @@ void BytecodeGenerator::VisitCompareOperation(CompareOperation* expr) {
     VisitForAccumulatorValue(expr->right());
     builder()->SetExpressionPosition(expr);
     if (expr->op() == Token::IN) {
-      builder()->CompareOperation(expr->op(), lhs);
+      FeedbackSlot slot = feedback_spec()->AddInSlot();
+      builder()->CompareOperation(expr->op(), lhs, feedback_index(slot));
     } else if (expr->op() == Token::INSTANCEOF) {
       FeedbackSlot slot = feedback_spec()->AddInstanceOfSlot();
       builder()->CompareOperation(expr->op(), lhs, feedback_index(slot));

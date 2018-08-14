@@ -784,7 +784,7 @@ class V8_EXPORT_PRIVATE JSOperatorBuilder final
 
   const Operator* DeleteProperty();
 
-  const Operator* HasProperty();
+  const Operator* HasProperty(const VectorSlotPair& feedback);
 
   const Operator* GetSuperConstructor();
 

@@ -2406,6 +2406,9 @@ void BytecodeGraphBuilder::BuildCompareOp(const Operator* op) {
       environment()->LookupRegister(bytecode_iterator().GetRegisterOperand(0));
   Node* right = environment()->LookupAccumulator();
 
+  // TODO(bmeurer): HasProperty has operands in wrong order.
+  if (op->opcode() == IrOpcode::kJSHasProperty) std::swap(right, left);
+
   FeedbackSlot slot = bytecode_iterator().GetSlotOperand(1);
   JSTypeHintLowering::LoweringResult lowering =
       TryBuildSimplifiedBinaryOp(op, left, right, slot);
@@ -2454,12 +2457,8 @@ void BytecodeGraphBuilder::VisitTestReferenceEqual() {
 }
 
 void BytecodeGraphBuilder::VisitTestIn() {
-  PrepareEagerCheckpoint();
-  Node* object = environment()->LookupAccumulator();
-  Node* key =
-      environment()->LookupRegister(bytecode_iterator().GetRegisterOperand(0));
-  Node* node = NewNode(javascript()->HasProperty(), object, key);
-  environment()->BindAccumulator(node, Environment::kAttachFrameState);
+  int const slot_index = bytecode_iterator().GetIndexOperand(1);
+  BuildCompareOp(javascript()->HasProperty(CreateVectorSlotPair(slot_index)));
 }
 
 void BytecodeGraphBuilder::VisitTestInstanceOf() {

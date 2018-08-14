@@ -58,6 +58,7 @@ FeedbackVector* FeedbackVector::cast(Object* obj) {
 int FeedbackMetadata::GetSlotSize(FeedbackSlotKind kind) {
   switch (kind) {
     case FeedbackSlotKind::kForIn:
+    case FeedbackSlotKind::kIn:
     case FeedbackSlotKind::kInstanceOf:
     case FeedbackSlotKind::kCompareOp:
     case FeedbackSlotKind::kBinaryOp:
@@ -326,6 +327,7 @@ void FeedbackVector::ComputeCounts(int* with_type_info, int* generic,
         total++;
         break;
       }
+      case FeedbackSlotKind::kIn:
       case FeedbackSlotKind::kInstanceOf: {
         if (obj->IsWeakOrClearedHeapObject()) {
           with++;

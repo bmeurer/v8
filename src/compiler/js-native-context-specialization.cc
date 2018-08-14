@@ -80,6 +80,8 @@ Reduction JSNativeContextSpecialization::Reduce(Node* node) {
       return ReduceJSAdd(node);
     case IrOpcode::kJSGetSuperConstructor:
       return ReduceJSGetSuperConstructor(node);
+    case IrOpcode::kJSHasProperty:
+      return ReduceJSHasProperty(node);
     case IrOpcode::kJSInstanceOf:
       return ReduceJSInstanceOf(node);
     case IrOpcode::kJSHasInPrototypeChain:
@@ -161,6 +163,72 @@ Reduction JSNativeContextSpecialization::ReduceJSGetSuperConstructor(
     dependencies()->DependOnStableMap(MapRef(js_heap_broker(), function_map));
     Node* value = jsgraph()->Constant(function_prototype);
     ReplaceWithValue(node, value);
+    return Replace(value);
+  }
+
+  return NoChange();
+}
+
+Reduction JSNativeContextSpecialization::ReduceJSHasProperty(Node* node) {
+  DCHECK_EQ(IrOpcode::kJSHasProperty, node->opcode());
+  FeedbackParameter const& p = FeedbackParameterOf(node->op());
+  Node* object = NodeProperties::GetValueInput(node, 0);
+  Node* key = NodeProperties::GetValueInput(node, 1);
+  Node* effect = NodeProperties::GetEffectInput(node);
+  Node* control = NodeProperties::GetControlInput(node);
+
+  if (!p.feedback().IsValid()) return NoChange();
+  FeedbackNexus nexus(p.feedback().vector(), p.feedback().slot());
+  HeapObject* feedback;
+  if (nexus.GetFeedback()->ToWeakHeapObject(&feedback)) {
+    Handle<Map> object_map(Map::cast(feedback), isolate());
+    DCHECK(object_map->IsJSArrayMap());
+    ElementsKind object_elements_kind = object_map->elements_kind();
+    DCHECK(IsFastElementsKind(object_elements_kind));
+
+    if (IsHoleyElementsKind(object_elements_kind)) {
+      if (!isolate()->IsNoElementsProtectorIntact()) return NoChange();
+      dependencies()->DependOnProtector(PropertyCellRef(
+          js_heap_broker(), factory()->no_elements_protector()));
+    }
+
+    object = effect = graph()->NewNode(simplified()->CheckHeapObject(), object,
+                                       effect, control);
+    effect =
+        graph()->NewNode(simplified()->CheckMaps(CheckMapsFlag::kNone,
+                                                 ZoneHandleSet<Map>(object_map),
+                                                 VectorSlotPair()),
+                         object, effect, control);
+
+    Node* object_length = effect = graph()->NewNode(
+        simplified()->LoadField(
+            AccessBuilder::ForJSArrayLength(object_elements_kind)),
+        object, effect, control);
+    Node* index = effect =
+        graph()->NewNode(simplified()->CheckBounds(VectorSlotPair()), key,
+                         object_length, effect, control);
+
+    Node* value;
+    if (IsHoleyElementsKind(object_elements_kind)) {
+      Node* object_elements = effect = graph()->NewNode(
+          simplified()->LoadField(AccessBuilder::ForJSObjectElements()), object,
+          effect, control);
+      Node* element = effect = graph()->NewNode(
+          simplified()->LoadElement(
+              AccessBuilder::ForFixedArrayElement(object_elements_kind)),
+          object_elements, index, effect, control);
+      if (IsDoubleElementsKind(object_elements_kind)) {
+        value = graph()->NewNode(simplified()->NumberIsFloat64Hole(), element);
+      } else {
+        value = graph()->NewNode(simplified()->ReferenceEqual(), element,
+                                 jsgraph()->TheHoleConstant());
+      }
+      value = graph()->NewNode(simplified()->BooleanNot(), value);
+    } else {
+      value = jsgraph()->TrueConstant();
+    }
+
+    ReplaceWithValue(node, value, effect, control);
     return Replace(value);
   }
 

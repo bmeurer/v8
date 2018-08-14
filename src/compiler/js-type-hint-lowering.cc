@@ -311,6 +311,7 @@ JSTypeHintLowering::LoweringResult JSTypeHintLowering::ReduceBinaryOperation(
       }
       break;
     }
+    case IrOpcode::kJSHasProperty:
     case IrOpcode::kJSInstanceOf: {
       DCHECK(!slot.IsInvalid());
       FeedbackNexus nexus(feedback_vector(), slot);
@@ -320,7 +321,7 @@ JSTypeHintLowering::LoweringResult JSTypeHintLowering::ReduceBinaryOperation(
         return LoweringResult::Exit(node);
       }
       // TODO(turbofan): Should we generally support early lowering of
-      // JSInstanceOf operators here?
+      // JSHasProperty and JSInstanceOf operators here?
       break;
     }
     case IrOpcode::kJSBitwiseOr:

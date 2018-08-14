@@ -50,6 +50,7 @@ enum class FeedbackSlotKind {
   kCreateClosure,
   kLiteral,
   kForIn,
+  kIn,
   kInstanceOf,
   kCloneObject,
 
@@ -390,6 +391,8 @@ class V8_EXPORT_PRIVATE FeedbackVectorSpec {
   }
 
   FeedbackSlot AddForInSlot() { return AddSlot(FeedbackSlotKind::kForIn); }
+
+  FeedbackSlot AddInSlot() { return AddSlot(FeedbackSlotKind::kIn); }
 
   FeedbackSlot AddInstanceOfSlot() {
     return AddSlot(FeedbackSlotKind::kInstanceOf);
